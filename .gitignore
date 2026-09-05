@@ -17,3 +17,4 @@ ENV/
 .idea/
 raw_orders.csv
 report*csv
+*log
