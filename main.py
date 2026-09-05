@@ -3,23 +3,23 @@ from pipeline import SeniorDataPipeline
 import os
 
 def main():
+    print("🏁 Запуск аналитической платформы маркетплейса...\n")
+    
+    # Генерация данных, если их нет
     if not os.path.exists('raw_orders.csv'):
         generate_mock_data()
         
+    # Инициализация пайплайна
     pipeline = SeniorDataPipeline(file_path='raw_orders.csv')
     
-    # Расширяем нашу красивую Senior-цепочку
-    processed_df = (pipeline
-                    .load_data()
-                    .clean_and_optimize()
-                    .run_rfm_analysis()  # <-- Добавили аналитику
-                    .detect_anomalies()  # <-- Добавили детекцию фрода
-                    .get_data())
-    
-    print("\n🚀 Фрагмент итоговой аналитической таблицы:")
-    # Показываем ключевые столбцы для проверки
-    cols_to_show = ['order_id', 'client_id', 'category', 'total_revenue', 'Client_Segment', 'is_anomaly']
-    print(processed_df[cols_to_show].head(10))
+    # Идеальная, чистая Senior-цепочка вызовов (Method Chaining)
+    pipeline.load_data() \
+            .clean_and_optimize() \
+            .run_rfm_analysis() \
+            .detect_anomalies() \
+            .export_reports()
+            
+    print("\n🎉 Проект успешно выполнен! Проверьте созданные файлы отчетов в папке проекта.")
 
 if __name__ == "__main__":
     main()

@@ -129,3 +129,42 @@ class SeniorDataPipeline:
         print(f"   - Обнаружено подозрительных заказов: {anomalies_count}")
         return self
 
+    def export_reports(self) -> 'SeniorDataPipeline':
+        """Шаг 5: Агрегация данных и экспорт бизнес-отчетов"""
+        print("💾 Генерация и сохранение бизнес-отчетов...")
+        
+        # 1. Отчет по категориям (Сводная таблица / Pivot Table)
+        # Считаем общую выручку, количество заказов и процент аномалий
+        category_report = self.df.pivot_table(
+            index='category',
+            values=['total_revenue', 'order_id', 'is_anomaly'],
+            aggfunc={
+                'total_revenue': 'sum',
+                'order_id': 'nunique',
+                'is_anomaly': 'mean' # Среднее от 0 и 1 покажет долю аномалий
+            },
+            observed=False
+        ).rename(columns={
+            'order_id': 'Количество заказов',
+            'total_revenue': 'Выручка',
+            'is_anomaly': 'Доля аномалий'
+        })
+        
+        # Переводим долю аномалий в проценты для красоты
+        category_report['Доля аномалий'] = (category_report['Доля аномалий'] * 100).round(2).astype(str) + '%'
+        category_report['Выручка'] = category_report['Выручка'].round(2)
+        
+        # 2. Отчет по поведению сегментов клиентов
+        segment_report = self.df.groupby('Client_Segment', observed=False).agg(
+            total_clients=('client_id', 'nunique'),
+            total_sales=('total_revenue', 'sum'),
+            avg_receipt=('total_revenue', 'mean')
+        ).round(2)
+        
+        # Сохраняем в CSV
+        category_report.to_csv('report_by_categories.csv', encoding='utf-8-sig')
+        segment_report.to_csv('report_by_segments.csv', encoding='utf-8-sig')
+        
+        print("   - [Успех] Файл 'report_by_categories.csv' сохранен.")
+        print("   - [Успех] Файл 'report_by_segments.csv' сохранен.")
+        return self
