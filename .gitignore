@@ -18,3 +18,4 @@ ENV/
 raw_orders.csv
 report*csv
 *log
+*.csv#
