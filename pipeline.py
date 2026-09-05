@@ -54,3 +54,78 @@ class SeniorDataPipeline:
     def get_data(self) -> pd.DataFrame:
         """Возвращает обработанный DataFrame"""
         return self.df
+
+    def run_rfm_analysis(self, current_date=None) -> 'SeniorDataPipeline':
+        """Шаг 3: Профессиональный RFM-анализ клиентов"""
+        print("📊 Запуск RFM-анализа клиентов...")
+        
+        # Если дата не задана, берем самый свежий день в данных + 1 день
+        if current_date is None:
+            current_date = self.df['order_date'].max() + pd.Timedelta(days=1)
+            
+        # Агрегируем данные по каждому клиенту
+        rfm = self.df.groupby('client_id').agg({
+            'order_date': lambda x: (current_date - x.max()).days, # Recency (Давность покупки)
+            'order_id': 'nunique',                                # Frequency (Частота покупок)
+            'total_revenue': 'sum'                                # Monetary (Сумма покупок)
+        }).rename(columns={
+            'order_date': 'Recency',
+            'order_id': 'Frequency',
+            'total_revenue': 'Monetary'
+        })
+        
+        # Разбиваем клиентов на 4 группы по квантилям (от 1 до 4)
+        # Для давности (Recency) меньший срок — это лучше (ставим 4 балла), поэтому инвертируем шкалу
+        rfm['R'] = pd.qcut(rfm['Recency'], q=4, labels=[4, 3, 2, 1]).astype(int)
+        # Из-за специфики распределения частоты (Frequency) используем rank(method='first'), чтобы избежать ошибок дублирования границ квантилей
+        rfm['F'] = pd.qcut(rfm['Frequency'].rank(method='first'), q=4, labels=[1, 2, 3, 4]).astype(int)
+        rfm['M'] = pd.qcut(rfm['Monetary'], q=4, labels=[1, 2, 3, 4]).astype(int)
+        
+        # Объединяем оценки в один код сегмента
+        rfm['RFM_Score'] = rfm['R'].astype(str) + rfm['F'].astype(str) + rfm['M'].astype(str)
+        
+        # Создаем понятные бизнесу текстовые сегменты
+        def segment_client(row):
+            if row['RFM_Score'] == '444':
+                return 'VIP-клиенты'
+            elif row['R'] == 4:
+                return 'Новые активные'
+            elif row['F'] == 4 and row['M'] == 4:
+                # Покупают много и часто, но давно не заходили
+                return 'В зоне риска (Лояльные теряются)'
+            elif row['R'] == 1 and row['F'] == 1:
+                return 'Ушедшие (Спящие)'
+            else:
+                return 'Постоянные середнячки'
+                
+        rfm['Client_Segment'] = rfm.apply(segment_client, axis=1)
+        
+        # Переносим результаты обратно в наш основной DataFrame
+        self.df = self.df.merge(
+            rfm['Client_Segment'], 
+            on='client_id', 
+            how='left'
+        )
+        print(f"   - Выделено сегментов клиентов: {rfm['Client_Segment'].value_counts().to_dict()}")
+        return self
+
+    def detect_anomalies(self) -> 'SeniorDataPipeline':
+        """Шаг 4: Поиск фрода и аномалий через правило 3-х сигм внутри категорий"""
+        print("🕵️‍♂️ Поиск аномальных транзакций...")
+        
+        # Считаем среднее и стандартное отклонение для каждой категории товаров отдельно
+        stats = self.df.groupby('category', observed=False)['total_revenue'].agg(['mean', 'std']).reset_index()
+        
+        # Объединяем статистику с основным датафреймом
+        temp_df = self.df.merge(stats, on='category', how='left')
+        
+        # Правило 3-х сигм: всё, что отклоняется от среднего больше чем на 3 стандартных отклонения — аномалия
+        is_anomaly = temp_df['total_revenue'] > (temp_df['mean'] + 3 * temp_df['std'])
+        
+        # Записываем метку в основной DataFrame
+        self.df['is_anomaly'] = is_anomaly.astype(int)
+        
+        anomalies_count = self.df['is_anomaly'].sum()
+        print(f"   - Обнаружено подозрительных заказов: {anomalies_count}")
+        return self
+

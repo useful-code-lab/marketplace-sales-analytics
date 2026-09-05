@@ -3,21 +3,23 @@ from pipeline import SeniorDataPipeline
 import os
 
 def main():
-    # 1. Если файла с данными нет, генерируем его
     if not os.path.exists('raw_orders.csv'):
         generate_mock_data()
         
-    # 2. Инициализируем и запускаем наш пайплайн
     pipeline = SeniorDataPipeline(file_path='raw_orders.csv')
     
-    # Запускаем цепочку обработки
+    # Расширяем нашу красивую Senior-цепочку
     processed_df = (pipeline
                     .load_data()
                     .clean_and_optimize()
+                    .run_rfm_analysis()  # <-- Добавили аналитику
+                    .detect_anomalies()  # <-- Добавили детекцию фрода
                     .get_data())
     
-    print("\n🚀 Первые 5 строк очищенных данных:")
-    print(processed_df.head())
+    print("\n🚀 Фрагмент итоговой аналитической таблицы:")
+    # Показываем ключевые столбцы для проверки
+    cols_to_show = ['order_id', 'client_id', 'category', 'total_revenue', 'Client_Segment', 'is_anomaly']
+    print(processed_df[cols_to_show].head(10))
 
 if __name__ == "__main__":
     main()
